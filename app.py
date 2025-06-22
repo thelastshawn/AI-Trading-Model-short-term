@@ -3,9 +3,10 @@ import pandas as pd
 import json
 import os
 from datetime import datetime
+import plotly.express as px
 
 # Set page config
-st.set_page_config(page_title="AI Market Predictions", layout="centered")
+st.set_page_config(page_title="AI Market Predictions", layout="wide")
 
 # Load predictions
 json_path = "daily_predictions.json"
@@ -20,7 +21,6 @@ df = pd.DataFrame(predictions)
 
 # Full asset name mapping
 asset_names = {
-    # Stocks & ETFs
     'AAPL': 'Apple Inc (AAPL)',
     'MSFT': 'Microsoft Corp (MSFT)',
     'GOOG': 'Alphabet Inc (GOOG)',
@@ -41,8 +41,6 @@ asset_names = {
     'BA': 'Boeing Co (BA)',
     'PYPL': 'PayPal Holdings Inc (PYPL)',
     'KO': 'Coca-Cola Co (KO)',
-    
-    # Crypto
     'BTC-USD': 'Bitcoin (BTC-USD)',
     'ETH-USD': 'Ethereum (ETH-USD)',
     'SOL-USD': 'Solana (SOL-USD)',
@@ -63,48 +61,59 @@ def format_prediction(row):
 
 df['prediction_display'] = df.apply(format_prediction, axis=1)
 
-# Page title and timestamp
+# Title & timestamp
 st.title("📊 AI Market Predictions")
 st.caption("Predicted movement for the next trading session")
 st.caption(f"Updated: {datetime.now().strftime('%B %d, %Y @ %I:%M %p')}")
 
-# Sort/filter options
-sort_by = st.selectbox("Sort by:", ["confidence", "asset"])
-ascending = st.checkbox("Ascending order", value=False)
-min_conf = st.slider("Minimum Confidence", 0.0, 1.0, 0.5)
+# Sidebar options
+with st.sidebar:
+    st.header("⚙️ Filters")
+    sort_by = st.selectbox("Sort by:", ["confidence", "asset"])
+    ascending = st.checkbox("Ascending order", value=False)
+    min_conf = st.slider("Minimum Confidence", 0.0, 1.0, 0.5)
 
-# Filtered and sorted DataFrame
+# Filter and sort data
 df_filtered = df[df['confidence'] >= min_conf].sort_values(by=sort_by, ascending=ascending)
 
-# Group assets
+# Categorize assets
 stock_assets = list(asset_names.keys())[:20]
 crypto_assets = list(asset_names.keys())[20:]
 
-# Display stock predictions
-st.subheader("📈 Stock & ETF Predictions")
 stock_df = df_filtered[df_filtered['asset'].isin(stock_assets)]
-st.write(stock_df[['full_name', 'prediction_display', 'confidence']].to_html(escape=False, index=False), unsafe_allow_html=True)
-
-# Display crypto predictions
-st.subheader("💰 Crypto Predictions")
 crypto_df = df_filtered[df_filtered['asset'].isin(crypto_assets)]
-st.write(crypto_df[['full_name', 'prediction_display', 'confidence']].to_html(escape=False, index=False), unsafe_allow_html=True)
 
-# Highlight most confident picks
-st.subheader("🔥 Most Confident Picks (70%+)")
-confident = df_filtered[df_filtered['confidence'] > 0.7]
-if confident.empty:
-    st.write("No high-confidence picks today.")
-else:
-    for _, row in confident.iterrows():
-        st.write(f"**{asset_names.get(row['asset'], row['asset'])}** → `{row['prediction']}` (Confidence: `{row['confidence']}`)")
+# Tabs
+tab1, tab2, tab3 = st.tabs(["📈 Stocks & ETFs", "💰 Crypto", "🔥 Top Picks"])
 
-# Acronym legend
+with tab1:
+    st.subheader("Stock & ETF Predictions")
+    st.write(stock_df[['full_name', 'prediction_display', 'confidence']].to_html(escape=False, index=False), unsafe_allow_html=True)
+
+with tab2:
+    st.subheader("Crypto Predictions")
+    st.write(crypto_df[['full_name', 'prediction_display', 'confidence']].to_html(escape=False, index=False), unsafe_allow_html=True)
+
+with tab3:
+    st.subheader("Most Confident Picks (70%+)")
+    confident = df_filtered[df_filtered['confidence'] > 0.7]
+    if confident.empty:
+        st.write("No high-confidence picks today.")
+    else:
+        for _, row in confident.iterrows():
+            st.write(f"**{asset_names.get(row['asset'], row['asset'])}** → `{row['prediction']}` (Confidence: `{row['confidence']}`)")
+
+# Optional: Acronym reference tab
 with st.expander("ℹ️ Full Asset Name Reference"):
     for symbol, name in asset_names.items():
         st.write(f"- {name}")
 
-# Styling
+# Plot confidence bar chart
+st.subheader("📊 Confidence Levels by Asset")
+fig = px.bar(df_filtered, x='full_name', y='confidence', color='prediction', title="Prediction Confidence", color_discrete_map={'UP': 'green', 'DOWN': 'red'})
+st.plotly_chart(fig, use_container_width=True)
+
+# Style
 st.markdown("""
 <style>
 .block-container {
