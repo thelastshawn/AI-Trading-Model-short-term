@@ -1,76 +1,137 @@
-import pandas as pd
-import joblib
-import os
-import ta
-import json
-
-# Define paths
-model_path = '/content/drive/MyDrive/AI Trading Model/xgboost_model.pkl'
-data_folder = '/content/drive/MyDrive/AI Trading Model/data'
-pred_output_path = '/content/drive/MyDrive/AI Trading Model/daily_predictions.json'
-
-# Full asset list
-assets = ['AAPL', 'MSFT', 'GOOG', 'QQQ', 'SPY', 'BTC-USD', 'ETH-USD', 'SOL-USD', 'AMZN', 'NVDA', 'TSLA', 'META', 'BRK-B', 'BABA', 'TSM', 'EWJ', 'FXI', 'EWG', 'GLD', 'SLV', 'UUP', 'FXE', 'USO', 'XRP-USD', 'DOGE-USD', 'ADA-USD', 'AVAX-USD']
-
-# Load model
-model = joblib.load(model_path)
-
-# Function to calculate features for the most recent row
-def generate_latest_features(df):
-    df = df.copy()
-    df.columns = [c.lower().replace(' ', '_') for c in df.columns]
-    price_col = 'adj_close' if 'adj_close' in df.columns else 'close'
-
-    for col in [price_col, 'high', 'low', 'close', 'open', 'volume']:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-
-    df = df.dropna()
-    df['daily_return'] = df[price_col].pct_change()
-    df['rsi_14'] = ta.momentum.RSIIndicator(df[price_col], window=14).rsi()
-    macd = ta.trend.MACD(df[price_col])
-    df['macd_hist'] = macd.macd_diff()
-    df['ma_10'] = df[price_col].rolling(window=10).mean()
-    df['ma_50'] = df[price_col].rolling(window=50).mean()
-    bb = ta.volatility.BollingerBands(df[price_col])
-    df['bb_percent'] = bb.bollinger_pband()
-    atr = ta.volatility.AverageTrueRange(df['high'], df['low'], df['close'])
-    df['atr'] = atr.average_true_range()
-    df['volume_change'] = df['volume'].pct_change()
-
-    df = df.dropna()
-    return df.iloc[[-1]]
-
-# Predict for each asset
-results = []
-for asset in assets:
-    file = f'{asset}_historical_20230623_20250622.csv'
-    full_path = os.path.join(data_folder, file)
-    if not os.path.exists(full_path):
-        print(f"Missing file for {asset}, skipping...")
-        continue
-
-    df = pd.read_csv(full_path)
-    latest = generate_latest_features(df)
-
-    X_latest = latest.select_dtypes(include=['number'])
-
-    prob = model.predict_proba(X_latest)[0][1]
-    pred = model.predict(X_latest)[0]
-
-    results.append({
-        'asset': asset,
-        'prediction': 'UP' if pred == 1 else 'DOWN',
-        'confidence': round(float(prob), 3)
-    })
-
-# Save to JSON
-with open(pred_output_path, 'w') as f:
-    json.dump(results, f, indent=2)
-
-# Show results
-print("\n--- Daily Predictions ---")
-for r in results:
-    print(f"{r['asset']}: {r['prediction']} (Confidence: {r['confidence']})")
-
-print(f"\n✅ Predictions saved to: {pred_output_path}")
+[
+  {
+    "asset": "AAPL",
+    "prediction": "DOWN",
+    "confidence": 0.351
+  },
+  {
+    "asset": "MSFT",
+    "prediction": "DOWN",
+    "confidence": 0.438
+  },
+  {
+    "asset": "GOOG",
+    "prediction": "DOWN",
+    "confidence": 0.153
+  },
+  {
+    "asset": "QQQ",
+    "prediction": "UP",
+    "confidence": 0.513
+  },
+  {
+    "asset": "SPY",
+    "prediction": "DOWN",
+    "confidence": 0.289
+  },
+  {
+    "asset": "BTC-USD",
+    "prediction": "DOWN",
+    "confidence": 0.099
+  },
+  {
+    "asset": "ETH-USD",
+    "prediction": "DOWN",
+    "confidence": 0.236
+  },
+  {
+    "asset": "SOL-USD",
+    "prediction": "UP",
+    "confidence": 0.654
+  },
+  {
+    "asset": "AMZN",
+    "prediction": "DOWN",
+    "confidence": 0.418
+  },
+  {
+    "asset": "NVDA",
+    "prediction": "UP",
+    "confidence": 0.631
+  },
+  {
+    "asset": "TSLA",
+    "prediction": "DOWN",
+    "confidence": 0.374
+  },
+  {
+    "asset": "META",
+    "prediction": "DOWN",
+    "confidence": 0.331
+  },
+  {
+    "asset": "BRK-B",
+    "prediction": "UP",
+    "confidence": 0.562
+  },
+  {
+    "asset": "BABA",
+    "prediction": "DOWN",
+    "confidence": 0.385
+  },
+  {
+    "asset": "TSM",
+    "prediction": "DOWN",
+    "confidence": 0.337
+  },
+  {
+    "asset": "EWJ",
+    "prediction": "DOWN",
+    "confidence": 0.246
+  },
+  {
+    "asset": "FXI",
+    "prediction": "DOWN",
+    "confidence": 0.456
+  },
+  {
+    "asset": "EWG",
+    "prediction": "DOWN",
+    "confidence": 0.287
+  },
+  {
+    "asset": "GLD",
+    "prediction": "UP",
+    "confidence": 0.569
+  },
+  {
+    "asset": "SLV",
+    "prediction": "DOWN",
+    "confidence": 0.349
+  },
+  {
+    "asset": "UUP",
+    "prediction": "DOWN",
+    "confidence": 0.395
+  },
+  {
+    "asset": "FXE",
+    "prediction": "DOWN",
+    "confidence": 0.379
+  },
+  {
+    "asset": "USO",
+    "prediction": "DOWN",
+    "confidence": 0.368
+  },
+  {
+    "asset": "XRP-USD",
+    "prediction": "DOWN",
+    "confidence": 0.304
+  },
+  {
+    "asset": "DOGE-USD",
+    "prediction": "DOWN",
+    "confidence": 0.211
+  },
+  {
+    "asset": "ADA-USD",
+    "prediction": "DOWN",
+    "confidence": 0.355
+  },
+  {
+    "asset": "AVAX-USD",
+    "prediction": "DOWN",
+    "confidence": 0.36
+  }
+]
