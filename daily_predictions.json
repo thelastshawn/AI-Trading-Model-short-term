@@ -1,0 +1,42 @@
+[
+  {
+    "asset": "AAPL",
+    "prediction": "DOWN",
+    "confidence": 0.188
+  },
+  {
+    "asset": "MSFT",
+    "prediction": "DOWN",
+    "confidence": 0.185
+  },
+  {
+    "asset": "GOOG",
+    "prediction": "DOWN",
+    "confidence": 0.061
+  },
+  {
+    "asset": "QQQ",
+    "prediction": "DOWN",
+    "confidence": 0.381
+  },
+  {
+    "asset": "SPY",
+    "prediction": "DOWN",
+    "confidence": 0.358
+  },
+  {
+    "asset": "BTC-USD",
+    "prediction": "DOWN",
+    "confidence": 0.276
+  },
+  {
+    "asset": "ETH-USD",
+    "prediction": "UP",
+    "confidence": 0.89
+  },
+  {
+    "asset": "SOL-USD",
+    "prediction": "UP",
+    "confidence": 0.736
+  }
+]
