@@ -18,8 +18,9 @@ with open(json_path, 'r') as f:
 
 df = pd.DataFrame(predictions)
 
-# Add full names for assets
+# Full asset name mapping
 asset_names = {
+    # Stocks & ETFs
     'AAPL': 'Apple Inc (AAPL)',
     'MSFT': 'Microsoft Corp (MSFT)',
     'GOOG': 'Alphabet Inc (GOOG)',
@@ -30,31 +31,28 @@ asset_names = {
     'AMZN': 'Amazon.com Inc (AMZN)',
     'META': 'Meta Platforms Inc (META)',
     'NFLX': 'Netflix Inc (NFLX)',
-    'ARKK': 'ARK Innovation ETF (ARKK)',
-    'DIA': 'SPDR Dow Jones Industrial ETF (DIA)',
-    'IWM': 'iShares Russell 2000 ETF (IWM)',
-    'VTI': 'Vanguard Total Stock Market ETF (VTI)',
-    'GLD': 'SPDR Gold Shares (GLD)',
-    'SLV': 'iShares Silver Trust (SLV)',
-    'USO': 'United States Oil Fund (USO)',
-    'TLT': 'iShares 20+ Year Treasury Bond ETF (TLT)',
+    'AMD': 'Advanced Micro Devices Inc (AMD)',
+    'INTC': 'Intel Corp (INTC)',
+    'DIS': 'Walt Disney Co (DIS)',
+    'V': 'Visa Inc (V)',
+    'JNJ': 'Johnson & Johnson (JNJ)',
+    'WMT': 'Walmart Inc (WMT)',
+    'JPM': 'JPMorgan Chase & Co (JPM)',
+    'BA': 'Boeing Co (BA)',
+    'PYPL': 'PayPal Holdings Inc (PYPL)',
+    'KO': 'Coca-Cola Co (KO)',
+    
+    # Crypto
     'BTC-USD': 'Bitcoin (BTC-USD)',
     'ETH-USD': 'Ethereum (ETH-USD)',
     'SOL-USD': 'Solana (SOL-USD)',
-    'BNB-USD': 'Binance Coin (BNB-USD)',
-    'XRP-USD': 'XRP (XRP-USD)',
-    'DOGE-USD': 'Dogecoin (DOGE-USD)',
+    'XRP-USD': 'Ripple (XRP-USD)',
     'ADA-USD': 'Cardano (ADA-USD)',
     'AVAX-USD': 'Avalanche (AVAX-USD)',
-    'DOT-USD': 'Polkadot (DOT-USD)'
-    'MSFT': 'Microsoft Corp (MSFT)',
-    'GOOG': 'Alphabet Inc (GOOG)',
-    'QQQ': 'Invesco QQQ ETF (QQQ)',
-    'SPY': 'SPDR S&P 500 ETF (SPY)',
-    'BTC-USD': 'Bitcoin (BTC-USD)',
-    'ETH-USD': 'Ethereum (ETH-USD)',
-    'SOL-USD': 'Solana (SOL-USD)'
+    'DOGE-USD': 'Dogecoin (DOGE-USD)'
 }
+
+# Map full names
 df['full_name'] = df['asset'].map(asset_names)
 
 # Format prediction with color and emoji
@@ -65,49 +63,48 @@ def format_prediction(row):
 
 df['prediction_display'] = df.apply(format_prediction, axis=1)
 
-# Title & timestamp
+# Page title and timestamp
 st.title("📊 AI Market Predictions")
-st.caption(f"Predicted movement for the next trading session")
+st.caption("Predicted movement for the next trading session")
 st.caption(f"Updated: {datetime.now().strftime('%B %d, %Y @ %I:%M %p')}")
 
-# Sorting and filtering
+# Sort/filter options
 sort_by = st.selectbox("Sort by:", ["confidence", "asset"])
 ascending = st.checkbox("Ascending order", value=False)
 min_conf = st.slider("Minimum Confidence", 0.0, 1.0, 0.5)
 
-# Filtered and sorted dataframe
+# Filtered and sorted DataFrame
 df_filtered = df[df['confidence'] >= min_conf].sort_values(by=sort_by, ascending=ascending)
 
-# Split by asset category
-stock_assets = ['AAPL', 'MSFT', 'GOOG', 'QQQ', 'SPY']
-crypto_assets = ['BTC-USD', 'ETH-USD', 'SOL-USD']
-
-stock_df = df_filtered[df_filtered['asset'].isin(stock_assets)]
-crypto_df = df_filtered[df_filtered['asset'].isin(crypto_assets)]
+# Group assets
+stock_assets = list(asset_names.keys())[:20]
+crypto_assets = list(asset_names.keys())[20:]
 
 # Display stock predictions
-st.subheader("📈 Stock Predictions")
+st.subheader("📈 Stock & ETF Predictions")
+stock_df = df_filtered[df_filtered['asset'].isin(stock_assets)]
 st.write(stock_df[['full_name', 'prediction_display', 'confidence']].to_html(escape=False, index=False), unsafe_allow_html=True)
 
 # Display crypto predictions
 st.subheader("💰 Crypto Predictions")
+crypto_df = df_filtered[df_filtered['asset'].isin(crypto_assets)]
 st.write(crypto_df[['full_name', 'prediction_display', 'confidence']].to_html(escape=False, index=False), unsafe_allow_html=True)
 
-# Most confident picks
+# Highlight most confident picks
 st.subheader("🔥 Most Confident Picks (70%+)")
 confident = df_filtered[df_filtered['confidence'] > 0.7]
 if confident.empty:
     st.write("No high-confidence picks today.")
 else:
     for _, row in confident.iterrows():
-        st.write(f"**{asset_names[row['asset']]}** → `{row['prediction']}` (Confidence: `{row['confidence']}`)")
+        st.write(f"**{asset_names.get(row['asset'], row['asset'])}** → `{row['prediction']}` (Confidence: `{row['confidence']}`)")
 
-# Optional: Acronym reference tab
+# Acronym legend
 with st.expander("ℹ️ Full Asset Name Reference"):
     for symbol, name in asset_names.items():
         st.write(f"- {name}")
 
-# Style adjustment for padding
+# Styling
 st.markdown("""
 <style>
 .block-container {
