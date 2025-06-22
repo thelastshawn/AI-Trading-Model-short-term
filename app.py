@@ -27,9 +27,28 @@ asset_names = {
     'SPY': 'SPDR S&P 500 ETF (SPY)',
     'BTC-USD': 'Bitcoin (BTC-USD)',
     'ETH-USD': 'Ethereum (ETH-USD)',
-    'SOL-USD': 'Solana (SOL-USD)'
+    'SOL-USD': 'Solana (SOL-USD)',
+    'AMZN': 'Amazon.com Inc (AMZN)',
+    'NVDA': 'NVIDIA Corporation (NVDA)',
+    'TSLA': 'Tesla Inc (TSLA)',
+    'META': 'Meta Platforms Inc (META)',
+    'BRK-B': 'Berkshire Hathaway Inc (BRK-B)',
+    'BABA': 'Alibaba Group (BABA)',
+    'TSM': 'Taiwan Semiconductor (TSM)',
+    'EWJ': 'iShares MSCI Japan ETF (EWJ)',
+    'FXI': 'iShares China Large-Cap ETF (FXI)',
+    'EWG': 'iShares MSCI Germany ETF (EWG)',
+    'GLD': 'SPDR Gold Shares (GLD)',
+    'SLV': 'iShares Silver Trust (SLV)',
+    'UUP': 'Invesco US Dollar Index (UUP)',
+    'FXE': 'Invesco Euro ETF (FXE)',
+    'USO': 'United States Oil Fund (USO)',
+    'XRP-USD': 'XRP (XRP-USD)',
+    'DOGE-USD': 'Dogecoin (DOGE-USD)',
+    'ADA-USD': 'Cardano (ADA-USD)',
+    'AVAX-USD': 'Avalanche (AVAX-USD)'
 }
-df['full_name'] = df['asset'].map(asset_names)
+df['full_name'] = df['asset'].map(asset_names).fillna(df['asset'])
 
 # Format prediction with color and emoji
 def format_prediction(row):
@@ -52,20 +71,23 @@ min_conf = st.slider("Minimum Confidence", 0.0, 1.0, 0.5)
 # Filtered and sorted dataframe
 df_filtered = df[df['confidence'] >= min_conf].sort_values(by=sort_by, ascending=ascending)
 
-# Split by asset category
-stock_assets = ['AAPL', 'MSFT', 'GOOG', 'QQQ', 'SPY']
-crypto_assets = ['BTC-USD', 'ETH-USD', 'SOL-USD']
+# Define categories
+stock_assets = ['AAPL', 'MSFT', 'GOOG', 'QQQ', 'SPY', 'AMZN', 'NVDA', 'TSLA', 'META', 'BRK-B']
+global_assets = ['BABA', 'TSM', 'EWJ', 'FXI', 'EWG']
+commodity_assets = ['GLD', 'SLV', 'UUP', 'FXE', 'USO']
+crypto_assets = ['BTC-USD', 'ETH-USD', 'SOL-USD', 'XRP-USD', 'DOGE-USD', 'ADA-USD', 'AVAX-USD']
 
-stock_df = df_filtered[df_filtered['asset'].isin(stock_assets)]
-crypto_df = df_filtered[df_filtered['asset'].isin(crypto_assets)]
+# Filter by category
+def render_category(title, symbols):
+    category_df = df_filtered[df_filtered['asset'].isin(symbols)]
+    if not category_df.empty:
+        st.subheader(title)
+        st.write(category_df[['full_name', 'prediction_display', 'confidence']].to_html(escape=False, index=False), unsafe_allow_html=True)
 
-# Display stock predictions
-st.subheader("📈 Stock Predictions")
-st.write(stock_df[['full_name', 'prediction_display', 'confidence']].to_html(escape=False, index=False), unsafe_allow_html=True)
-
-# Display crypto predictions
-st.subheader("💰 Crypto Predictions")
-st.write(crypto_df[['full_name', 'prediction_display', 'confidence']].to_html(escape=False, index=False), unsafe_allow_html=True)
+render_category("📈 U.S. Stocks", stock_assets)
+render_category("🌍 Global Stocks/ETFs", global_assets)
+render_category("🪙 Commodities & Currencies", commodity_assets)
+render_category("💰 Cryptocurrencies", crypto_assets)
 
 # Most confident picks
 st.subheader("🔥 Most Confident Picks (70%+)")
@@ -74,11 +96,11 @@ if confident.empty:
     st.write("No high-confidence picks today.")
 else:
     for _, row in confident.iterrows():
-        st.write(f"**{asset_names[row['asset']]}** → `{row['prediction']}` (Confidence: `{row['confidence']}`)")
+        st.write(f"**{asset_names.get(row['asset'], row['asset'])}** → `{row['prediction']}` (Confidence: `{row['confidence']}`)")
 
 # Optional: Acronym reference tab
 with st.expander("ℹ️ Full Asset Name Reference"):
-    for symbol, name in asset_names.items():
+    for symbol, name in sorted(asset_names.items()):
         st.write(f"- {name}")
 
 # Style adjustment for padding
