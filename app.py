@@ -18,7 +18,7 @@ df = pd.json_normalize(predictions)
 
 # Rename for consistency
 df.rename(columns={"symbol": "Symbol", "Date": "Date", "confidence": "Confidence",
-                   "edge": "Edge", "predicted_label_name": "Prediction", "features": "Features"}, inplace=True)
+                   "edge": "Edge", "predicted_label_name": "Prediction", "features": "features"}, inplace=True)
 
 # === UI CONFIG ===
 st.set_page_config(page_title="📊 AI Stock Predictions", layout="wide")
@@ -55,10 +55,10 @@ st.download_button("⬇️ Download CSV", csv, "predictions.csv", "text/csv")
 st.subheader("🧠 Feature Snapshot")
 for idx, row in df_filtered.iterrows():
     with st.expander(f"{row['Date']} - {row['Symbol']} ({row['Prediction']})"): 
-        st.json(row["Features"])
+        st.json(row["features"])
 
         # Line chart for technical indicators
-        feature_df = pd.DataFrame([row["Features"]])
+        feature_df = pd.DataFrame([row["features"]])
         indicators = ["rsi", "macd", "macd_signal", "ema_20", "ema_50", "bb_upper", "bb_lower"]
         indicator_values = feature_df[indicators].T.rename(columns={0: "value"})
         st.line_chart(indicator_values)
