@@ -23,16 +23,18 @@ if not isinstance(data, list) or len(data) == 0:
 
 df = pd.DataFrame(data)
 
-# Show available columns for debugging
-# st.write("Loaded columns:", df.columns.tolist())
+# Ensure 'confidence' is numeric for filtering
+if "confidence" in df.columns:
+    df["confidence"] = pd.to_numeric(df["confidence"], errors="coerce")
+else:
+    st.error("Missing 'confidence' column in prediction data.")
+    st.stop()
+
+# Drop rows where confidence could not be converted
+df = df.dropna(subset=["confidence"])
 
 # === FILTERING OPTIONS ===
 min_conf = st.slider("Minimum Confidence", min_value=0.0, max_value=1.0, value=0.5, step=0.01)
-
-# Check for required columns and filter accordingly
-if "confidence" not in df.columns:
-    st.error("Missing 'confidence' column in prediction data.")
-    st.stop()
 
 # Handle sort options dynamically
 default_sort_columns = ["confidence", "symbol"]
