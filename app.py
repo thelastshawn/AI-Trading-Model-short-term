@@ -1,73 +1,70 @@
 import streamlit as st
 import pandas as pd
 import json
+import os
 
-# === Load JSON Predictions ===
-with open("daily_predictions.json", "r") as f:
-    data = json.load(f)
+# === LOAD DATA ===
+json_path = "daily_predictions.json"
 
-df = pd.DataFrame(data)
+if not os.path.exists(json_path):
+    st.error(f"Prediction file not found at {json_path}")
+    st.stop()
 
-# === Type Conversions ===
-if "confidence" in df.columns:
-    df["confidence"] = df["confidence"].astype(float)
+with open(json_path, "r") as f:
+    predictions = json.load(f)
 
-if "edge" in df.columns:
-    df["edge"] = pd.to_numeric(df["edge"], errors="coerce").fillna(0.0)
+# Convert to DataFrame
+df = pd.json_normalize(predictions)
 
-if "date" in df.columns:
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+# Ensure required columns exist
+required_cols = ["symbol", "Date", "confidence", "prediction", "predicted_label_name", "edge", "features"]
+missing_cols = [col for col in required_cols if col not in df.columns]
+if missing_cols:
+    st.error(f"Missing required columns: {missing_cols}")
+    st.stop()
 
-# === UI Header ===
-st.title("📈 AI Daily Trading Predictions")
-st.subheader("Model Output (Short-Term)")
+# Rename columns
+df.rename(columns={
+    "symbol": "Symbol",
+    "Date": "Date",
+    "confidence": "Confidence",
+    "edge": "Edge",
+    "predicted_label_name": "Prediction",
+    "features": "Features"
+}, inplace=True)
 
-# === Filters ===
-st.markdown("### Filters:")
-min_conf = st.slider("Minimum Confidence", 0.5, 1.0, 0.7, 0.01)
+# === UI CONFIG ===
+st.set_page_config(page_title="AI Trading Predictions", layout="wide")
+st.title("📈 AI-Powered Stock Predictions")
 
-# Handle optional filters safely
-if "edge" in df.columns:
-    min_edge = st.slider("Minimum Edge (%)", 0.0, 10.0, 1.0, 0.1)
-else:
-    min_edge = 0.0
+# === FILTERS ===
+col1, col2, col3 = st.columns(3)
 
-category = st.multiselect(
-    "Confidence Category",
-    options=df["confidence_category"].unique() if "confidence_category" in df.columns else [],
-    default=df["confidence_category"].unique() if "confidence_category" in df.columns else []
-)
+symbols = sorted(df["Symbol"].unique())
+selected_symbols = col1.multiselect("Select Symbols", symbols, default=symbols[:10])
+min_conf = col2.slider("Minimum Confidence", 0.5, 1.0, 0.55, 0.01)
+pred_choice = col3.radio("Prediction Type", ["All", "bullish", "bearish"])
 
-direction = st.multiselect(
-    "Direction",
-    options=df["direction"].unique() if "direction" in df.columns else [],
-    default=df["direction"].unique() if "direction" in df.columns else []
-)
+# === FILTER DATA ===
+df_filtered = df[df["Symbol"].isin(selected_symbols)]
+df_filtered = df_filtered[df_filtered["Confidence"] >= min_conf]
+if pred_choice != "All":
+    df_filtered = df_filtered[df_filtered["Prediction"] == pred_choice]
 
-sortable_columns = [col for col in ["confidence", "edge", "symbol", "date"] if col in df.columns]
-sort_by = st.selectbox("Sort by:", sortable_columns)
-ascending = st.checkbox("Ascending", value=False)
-
-# === Filter Logic ===
-df_filtered = df[df["confidence"] >= min_conf]
-
-if "edge" in df.columns:
-    df_filtered = df_filtered[df_filtered["edge"] >= min_edge]
-
-if "confidence_category" in df.columns and category:
-    df_filtered = df_filtered[df_filtered["confidence_category"].isin(category)]
-
-if "direction" in df.columns and direction:
-    df_filtered = df_filtered[df_filtered["direction"].isin(direction)]
-
+# === SORTING ===
+sort_by = st.selectbox("Sort by:", ["Confidence", "Edge", "Symbol", "Date"])
+ascending = st.checkbox("Sort ascending?", value=False)
 df_filtered = df_filtered.sort_values(by=sort_by, ascending=ascending)
 
-# === Display Results ===
-st.markdown(f"### 🔍 Showing {len(df_filtered)} predictions")
+# === DISPLAY TABLE ===
+st.subheader("Filtered Predictions")
+st.dataframe(df_filtered[["Date", "Symbol", "Prediction", "Confidence", "Edge"]])
 
-columns_to_display = [col for col in [
-    "symbol", "prediction", "direction", "confidence", "edge",
-    "confidence_category", "note", "date"
-] if col in df_filtered.columns]
-
-st.dataframe(df_filtered[columns_to_display], use_container_width=True)
+# === DISPLAY FEATURE DETAILS ===
+st.subheader("Feature Snapshot")
+for idx, row in df_filtered.iterrows():
+    with st.expander(f"{row['Date']} - {row['Symbol']} ({row['Prediction']})"): 
+        if isinstance(row["Features"], dict):
+            st.json(row["Features"])
+        else:
+            st.write("No feature data available.")
