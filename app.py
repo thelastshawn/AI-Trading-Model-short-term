@@ -1,54 +1,42 @@
 import streamlit as st
 import pandas as pd
 import json
-import os
 
-# === SETUP ===
-st.set_page_config(page_title="AI Trading Predictions", layout="wide")
-st.title("📈 AI-Powered Trading Predictions")
-
-# === LOAD PREDICTIONS ===
-json_path = "daily_predictions.json"
-
-if not os.path.exists(json_path):
-    st.error("Prediction file not found.")
-    st.stop()
-
-with open(json_path, "r") as f:
+# === Load JSON Predictions ===
+with open("daily_predictions.json", "r") as f:
     data = json.load(f)
-
-if not isinstance(data, list) or len(data) == 0:
-    st.error("No predictions available.")
-    st.stop()
 
 df = pd.DataFrame(data)
 
-# Ensure 'confidence' is numeric for filtering
-if "confidence" in df.columns:
-    df["confidence"] = pd.to_numeric(df["confidence"], errors="coerce")
-else:
-    st.error("Missing 'confidence' column in prediction data.")
-    st.stop()
+# === Convert Types ===
+df["confidence"] = df["confidence"].astype(float)
+df["edge"] = df["edge"].astype(float)
+df["date"] = pd.to_datetime(df["date"])
 
-# Drop rows where confidence could not be converted
-df = df.dropna(subset=["confidence"])
+# === UI Layout ===
+st.title("📈 AI Daily Trading Predictions")
+st.subheader("Model Output (Short-Term)")
 
-# === FILTERING OPTIONS ===
-min_conf = st.slider("Minimum Confidence", min_value=0.0, max_value=1.0, value=0.5, step=0.01)
+# === Filters ===
+st.markdown("### Filters:")
+min_conf = st.slider("Minimum Confidence", 0.5, 1.0, 0.7, 0.01)
+min_edge = st.slider("Minimum Edge (%)", 0.0, 10.0, 1.0, 0.1)
+category = st.multiselect("Confidence Category", options=df["confidence_category"].unique(), default=df["confidence_category"].unique())
+direction = st.multiselect("Direction", options=df["direction"].unique(), default=df["direction"].unique())
+sort_by = st.selectbox("Sort by:", ["confidence", "edge", "symbol", "date"])
+ascending = st.checkbox("Ascending", value=False)
 
-# Handle sort options dynamically
-default_sort_columns = ["confidence", "symbol"]
-available_sort_columns = [col for col in default_sort_columns if col in df.columns]
+# === Filter Data ===
+df_filtered = df[
+    (df["confidence"] >= min_conf) &
+    (df["edge"] >= min_edge) &
+    (df["confidence_category"].isin(category)) &
+    (df["direction"].isin(direction))
+].sort_values(by=sort_by, ascending=ascending)
 
-if not available_sort_columns:
-    st.error("No valid columns available for sorting.")
-    st.stop()
-
-sort_by = st.selectbox("Sort by:", available_sort_columns)
-ascending = st.checkbox("Sort Ascending?", value=False)
-
-# === DISPLAY RESULTS ===
-df_filtered = df[df["confidence"] >= min_conf].sort_values(by=sort_by, ascending=ascending)
-
-st.markdown(f"### 🔍 Filtered Predictions (Total: {len(df_filtered)})")
-st.dataframe(df_filtered.reset_index(drop=True), use_container_width=True)
+# === Display ===
+st.markdown(f"### 🔍 Showing {len(df_filtered)} predictions")
+st.dataframe(
+    df_filtered[["symbol", "prediction", "direction", "confidence", "edge", "confidence_category", "note", "date"]],
+    use_container_width=True
+)
