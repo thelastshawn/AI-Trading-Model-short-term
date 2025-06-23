@@ -16,9 +16,15 @@ if not predictions or not all("features" in p for p in predictions):
 # Flatten and normalize
 df = pd.json_normalize(predictions)
 
+# Rebuild full features dict for display use
+feature_cols = [col for col in df.columns if col.startswith("features.")]
+df["features"] = df[feature_cols].apply(lambda x: {
+    col.replace("features.", ""): x[col] for col in feature_cols
+}, axis=1)
+
 # Rename for consistency
 df.rename(columns={"symbol": "Symbol", "Date": "Date", "confidence": "Confidence",
-                   "edge": "Edge", "predicted_label_name": "Prediction", "features": "features"}, inplace=True)
+                   "edge": "Edge", "predicted_label_name": "Prediction"}, inplace=True)
 
 # === UI CONFIG ===
 st.set_page_config(page_title="📊 AI Stock Predictions", layout="wide")
@@ -55,13 +61,21 @@ st.download_button("⬇️ Download CSV", csv, "predictions.csv", "text/csv")
 st.subheader("🧠 Feature Snapshot")
 for idx, row in df_filtered.iterrows():
     with st.expander(f"{row['Date']} - {row['Symbol']} ({row['Prediction']})"): 
-        st.json(row["features"])
+        # Safely display reconstructed features
+        if isinstance(row["features"], dict):
+            st.json(row["features"])
+            feature_df = pd.DataFrame([row["features"]])
 
-        # Line chart for technical indicators
-        feature_df = pd.DataFrame([row["features"]])
-        indicators = ["rsi", "macd", "macd_signal", "ema_20", "ema_50", "bb_upper", "bb_lower"]
-        indicator_values = feature_df[indicators].T.rename(columns={0: "value"})
-        st.line_chart(indicator_values)
+            # Line chart for key indicators
+            indicators = ["rsi", "macd", "macd_signal", "ema_20", "ema_50", "bb_upper", "bb_lower"]
+            indicators = [ind for ind in indicators if ind in feature_df.columns]
+            if indicators:
+                indicator_values = feature_df[indicators].T.rename(columns={0: "value"})
+                st.line_chart(indicator_values)
+            else:
+                st.info("No chartable indicators found.")
+        else:
+            st.warning("⚠️ Features unavailable for this entry.")
 
 # === SUMMARY ===
 st.subheader("📊 Rolling Summary")
