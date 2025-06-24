@@ -1,125 +1,133 @@
 import streamlit as st
 import pandas as pd
 import json
-import os
+import yfinance as yf
 
-# === PAGE CONFIG ===
-st.set_page_config(page_title="📈 Nova Picks – AI Market Predictions", layout="wide")
+# === CONFIG ===
+st.set_page_config(page_title="🚀 Nova Picks – AI Market Predictions", layout="wide")
 
 # === HEADER ===
-st.title("🚀 Nova Picks – AI Market Predictions")
-st.caption("Your beginner-friendly AI assistant for smart trading decisions.")
+st.title("💹 Nova Picks – AI Market Predictions")
+st.caption("A bold, beginner-friendly trading dashboard powered by AI.")
 
-# === HELPER FUNCTIONS ===
-symbol_names = {
-    "AAPL": "Apple Inc.",
-    "TSLA": "Tesla, Inc.",
-    "MSFT": "Microsoft Corp.",
-    "GOOGL": "Alphabet Inc.",
-    "AMZN": "Amazon.com Inc.",
-    "META": "Meta Platforms",
-    "NFLX": "Netflix Inc.",
-    "NVDA": "NVIDIA Corp.",
-    "SPY": "S&P 500 ETF",
-    "QQQ": "Nasdaq 100 ETF",
-    "VTI": "Total Stock Market ETF",
-    "BTC-USD": "Bitcoin",
-    "ETH-USD": "Ethereum"
-}
-
-def get_name(symbol):
-    return f"{symbol_names.get(symbol, 'Unknown Company')} ({symbol})"
-
-glossary = {
-    "RSI": "Relative Strength Index – measures momentum and overbought/oversold levels.",
-    "MACD": "Moving Average Convergence Divergence – tracks trend and momentum changes.",
-    "EMA": "Exponential Moving Average – a weighted moving average.",
-    "Bollinger Bands": "Volatility bands set above/below a moving average."
-}
-
-# === LOAD JSON FILE DIRECTLY FROM REPO ===
-if not os.path.exists("daily_predictions.json"):
-    st.error("❌ daily_predictions.json not found in your repo. Make sure the file is committed.")
-else:
+# === SYMBOL NAME LOOKUP ===
+@st.cache_data
+def fetch_name(symbol):
     try:
-        with open("daily_predictions.json", "r") as f:
-            predictions = json.load(f)
-        df = pd.json_normalize(predictions)
+        ticker = yf.Ticker(symbol)
+        return ticker.info.get("shortName", None)
+    except:
+        return None
 
-        # === CLASSIFY SYMBOLS ===
-        def classify(symbol):
-            if "-USD" in symbol:
-                return "Crypto"
-            elif symbol in ["SPY", "QQQ", "VTI", "ARKK", "DIA", "XLF", "XLE", "XLK"]:
-                return "ETF"
-            else:
-                return "Stock"
+# === GLOSSARY ===
+glossary = {
+    "RSI": "Relative Strength Index – shows if something is overbought/oversold.",
+    "MACD": "Moving Average Convergence Divergence – shows momentum shift.",
+    "EMA": "Exponential Moving Average – weighted moving average.",
+    "Bollinger Bands": "Bands that show price volatility boundaries."
+}
 
-        df["Category"] = df["symbol"].apply(classify)
-        df["Name"] = df["symbol"].apply(get_name)
-        df["Confidence %"] = (df["confidence"] * 100).round(2)
-        df["Prediction Label"] = df["predicted_label_name"].apply(lambda x: "📈 Bullish" if x == "bullish" else "📉 Bearish")
-        df = df.sort_values("confidence", ascending=False)
+# === LOAD JSON FROM GITHUB REPO ===
+try:
+    with open("daily_predictions.json", "r") as f:
+        predictions = json.load(f)
+    df = pd.json_normalize(predictions)
 
-        # === FILTERS ===
-        st.sidebar.header("🔍 Filters")
-        min_conf = st.sidebar.slider("Minimum Confidence", 0.0, 1.0, 0.5, 0.01)
-        category_filter = st.sidebar.multiselect("Asset Type", ["Stock", "Crypto", "ETF"], default=["Stock", "Crypto", "ETF"])
-        df = df[(df["confidence"] >= min_conf) & (df["Category"].isin(category_filter))]
+    # === CLASSIFY SYMBOLS ===
+    def classify(symbol):
+        if "-USD" in symbol:
+            return "Crypto"
+        elif symbol in ["SPY", "QQQ", "VTI", "ARKK", "DIA", "XLF", "XLE", "XLK"]:
+            return "ETF"
+        else:
+            return "Stock"
 
-        # === DISPLAY PICKS ===
-        st.header("🎯 Today's Most Confident Picks")
-        for _, row in df.iterrows():
-            with st.expander(f"{row['Name']} – {row['Prediction Label']} ({row['Confidence %']}% Confidence)"):
-                st.markdown("#### 🔍 Overview")
-                st.markdown(f"**Category:** {row['Category']}")
-                st.markdown(f"**Edge:** `{round(row['edge']*100, 2)}%`")
+    df["Category"] = df["symbol"].apply(classify)
+    df["Full Name"] = df["symbol"].apply(lambda s: f"{fetch_name(s)} ({s})" if fetch_name(s) else s)
+    df["Confidence %"] = (df["confidence"] * 100).round(2)
+    df["Prediction Label"] = df["predicted_label_name"].apply(lambda x: "📈 Bullish" if x == "bullish" else "📉 Bearish")
+    df = df.sort_values("confidence", ascending=False)
 
-                # === CLEAN FEATURE DISPLAY ===
-                feature_cols = [col for col in row.index if col.startswith("features.")]
-                feature_dict = {
-                    col.split("features.")[-1]: row[col]
-                    for col in feature_cols
-                    if pd.notnull(row[col])
-                }
+    # === FILTERS ===
+    st.sidebar.header("🔍 Filters")
+    min_conf = st.sidebar.slider("Minimum Confidence", 0.0, 1.0, 0.5, 0.01)
+    asset_type = st.sidebar.multiselect("Asset Type", ["Stock", "ETF", "Crypto"], default=["Stock", "ETF", "Crypto"])
+    df = df[(df["confidence"] >= min_conf) & (df["Category"].isin(asset_type))]
 
-                if feature_dict:
-                    st.markdown("#### 📊 Trader Signals")
-                    for key, value in feature_dict.items():
-                        label = key.upper()
-                        if "rsi" in key.lower():
-                            label = "RSI (Relative Strength Index)"
-                        elif "macd_signal" in key.lower():
-                            label = "MACD Signal Line"
-                        elif "macd" in key.lower():
-                            label = "MACD"
-                        elif "ema_20" in key.lower():
-                            label = "EMA 20"
-                        elif "ema_50" in key.lower():
-                            label = "EMA 50"
-                        elif "bb_upper" in key.lower():
-                            label = "Bollinger Upper Band"
-                        elif "bb_lower" in key.lower():
-                            label = "Bollinger Lower Band"
-                        st.markdown(f"- **{label}:** `{round(value, 2)}`")
+    # === DISPLAY PICKS IN CARD STYLE ===
+    st.header("🌟 Today's Most Confident Picks")
 
-        # === GLOSSARY ===
-        with st.expander("📘 What do these terms mean?"):
-            for term, definition in glossary.items():
-                st.markdown(f"**{term}:** {definition}")
+    for _, row in df.iterrows():
+        with st.container():
+            st.markdown(
+                f"""
+                <div style='border: 1px solid #444; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; background-color: #111;'>
+                    <h3 style='color:#fff;'>🧠 {row['Full Name']} – {row['Prediction Label']} <span style='font-size: 16px;'>({row['Confidence %']}% confidence)</span></h3>
+                    <p><b>Asset Type:</b> {row['Category']} &nbsp;&nbsp;|&nbsp;&nbsp; <b>Edge:</b> {round(row['edge']*100, 2)}%</p>
+                """, unsafe_allow_html=True
+            )
 
-        # === TOP PICKS (SIDEBAR) ===
-        st.sidebar.header("📈 Top Bullish & Bearish Picks")
-        top_bull = df[df["predicted_label_name"] == "bullish"].head(1)
-        top_bear = df[df["predicted_label_name"] == "bearish"].head(1)
-        if not top_bull.empty:
-            st.sidebar.success(f"Top Bullish: {top_bull.iloc[0]['Name']} ({top_bull.iloc[0]['Confidence %']}%)")
-        if not top_bear.empty:
-            st.sidebar.error(f"Top Bearish: {top_bear.iloc[0]['Name']} ({top_bear.iloc[0]['Confidence %']}%)")
+            feature_cols = [col for col in row.index if col.startswith("features.")]
+            feature_dict = {col.split("features.")[-1]: row[col] for col in feature_cols if pd.notnull(row[col])}
 
-        # === DOWNLOAD ===
-        csv = df.to_csv(index=False)
-        st.download_button("⬇️ Download Predictions as CSV", csv, "nova_predictions.csv", "text/csv")
+            if feature_dict:
+                st.markdown("#### 📊 Trader Signals")
+                cols = st.columns(3)
+                keys = list(feature_dict.keys())
+                for i, key in enumerate(keys):
+                    val = round(feature_dict[key], 2)
+                    label = key.upper()
+                    if key == "rsi":
+                        label = "RSI (Momentum)"
+                    elif key == "macd":
+                        label = "MACD"
+                    elif key == "macd_signal":
+                        label = "MACD Signal"
+                    elif key == "ema_20":
+                        label = "EMA 20"
+                    elif key == "ema_50":
+                        label = "EMA 50"
+                    elif key == "bb_upper":
+                        label = "Bollinger Upper"
+                    elif key == "bb_lower":
+                        label = "Bollinger Lower"
+                    elif key == "roc":
+                        label = "Rate of Change"
+                    elif key == "volume":
+                        label = "Volume"
+                    elif key == "open":
+                        label = "Open Price"
+                    elif key == "close":
+                        label = "Close Price"
+                    elif key == "high":
+                        label = "High"
+                    elif key == "low":
+                        label = "Low"
+                    elif key == "dayofweek":
+                        label = "Day of Week"
+                    elif key == "month":
+                        label = "Month"
+                    cols[i % 3].metric(label, val)
 
-    except Exception as e:
-        st.error(f"❌ Failed to load predictions: {e}")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    # === GLOSSARY ===
+    with st.expander("📘 What do these trading signals mean?"):
+        for term, definition in glossary.items():
+            st.markdown(f"**{term}:** {definition}")
+
+    # === TOP PICKS SIDEBAR ===
+    st.sidebar.header("🏆 Top Picks")
+    top_bull = df[df["predicted_label_name"] == "bullish"].head(1)
+    top_bear = df[df["predicted_label_name"] == "bearish"].head(1)
+    if not top_bull.empty:
+        st.sidebar.success(f"Top Bullish: {top_bull.iloc[0]['Full Name']}")
+    if not top_bear.empty:
+        st.sidebar.error(f"Top Bearish: {top_bear.iloc[0]['Full Name']}")
+
+    # === DOWNLOAD ===
+    csv = df.to_csv(index=False)
+    st.download_button("⬇️ Download Full Predictions", csv, "nova_predictions.csv", "text/csv")
+
+except Exception as e:
+    st.error(f"❌ Error loading predictions: {e}")
