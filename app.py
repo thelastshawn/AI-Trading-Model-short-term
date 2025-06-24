@@ -1,87 +1,70 @@
 import streamlit as st
 import pandas as pd
 import json
-import matplotlib.pyplot as plt
-import io
 
 # === PAGE CONFIG ===
-st.set_page_config(page_title="📊 AI Stock Predictions", layout="wide")
-
-# === CUSTOM CSS ===
-st.markdown("""
-<style>
-    .main {
-        background-color: #0f1117;
-        color: #f0f0f0;
-    }
-    h1, h2, h3 {
-        color: #00ffe5;
-    }
-    .stButton > button {
-        background-color: #1f77b4;
-        color: white;
-        font-weight: bold;
-        border-radius: 10px;
-    }
-</style>
-""", unsafe_allow_html=True)
+st.set_page_config(page_title="📊 AI Predictions Dashboard", layout="wide")
 
 # === HEADER ===
-st.title("📈 AI-Powered Stock Predictions Dashboard")
-st.caption("💡 Built with XGBoost & Streamlit | Live edge & confidence insights")
+st.title("🤖 AI-Powered Market Predictions")
+st.caption("Explore predictions by asset type, confidence, and detailed feature charts.")
 
 # === LOAD DATA ===
-with open("daily_predictions.json", "r") as f:
+with open("daily_predictions.txt", "r") as f:
     predictions = json.load(f)
 
-if not predictions or not all("features" in p for p in predictions):
-    st.error("🚨 Missing required columns: ['features']")
-    st.stop()
-
 df = pd.json_normalize(predictions)
-df.rename(columns={"symbol": "Symbol", "Date": "Date", "confidence": "Confidence",
-                   "edge": "Edge", "predicted_label_name": "Prediction", "features": "features"}, inplace=True)
 
-# === FILTERS ===
-st.sidebar.title("🧭 Filters")
-symbols = sorted(df["Symbol"].unique())
-selected_symbols = st.sidebar.multiselect("🔎 Symbols", symbols, default=symbols[:10])
-min_conf = st.sidebar.slider("📶 Minimum Confidence", 0.5, 1.0, 0.55, 0.01)
-pred_choice = st.sidebar.radio("📌 Prediction Type", ["All", "bullish", "bearish"])
-sort_by = st.sidebar.selectbox("🔃 Sort by", ["Confidence", "Edge", "Symbol", "Date"])
-ascending = st.sidebar.checkbox("⬆️ Sort ascending?", value=False)
+# === CLASSIFY SYMBOLS ===
+def classify(symbol):
+    if "-USD" in symbol:
+        return "Crypto"
+    elif symbol in ["SPY", "QQQ", "VTI", "ARKK", "DIA", "XLF", "XLE", "XLK"]:
+        return "ETF"
+    else:
+        return "Stock"
 
-# === FILTERED DATA ===
-df_filtered = df[df["Symbol"].isin(selected_symbols)]
-df_filtered = df_filtered[df_filtered["Confidence"] >= min_conf]
-if pred_choice != "All":
-    df_filtered = df_filtered[df_filtered["Prediction"] == pred_choice]
-df_filtered = df_filtered.sort_values(by=sort_by, ascending=ascending)
+df["Category"] = df["symbol"].apply(classify)
+df["Confidence %"] = (df["confidence"] * 100).round(2)
+df["Prediction Label"] = df["predicted_label_name"].apply(lambda x: "📈 Bullish" if x == "bullish" else "📉 Bearish")
 
-# === DISPLAY TABLE ===
-st.subheader("📋 Filtered Predictions")
-st.dataframe(df_filtered[["Date", "Symbol", "Prediction", "Confidence", "Edge"]], use_container_width=True)
+# === SIDEBAR FILTERS ===
+st.sidebar.header("🔍 Filters")
+min_conf = st.sidebar.slider("Minimum Confidence", 0.0, 1.0, 0.5, 0.01)
+category_filter = st.sidebar.multiselect("Category", ["Stock", "Crypto", "ETF"], default=["Stock", "Crypto", "ETF"])
+df = df[(df["confidence"] >= min_conf) & (df["Category"].isin(category_filter))]
 
-# === CSV DOWNLOAD ===
-csv = df_filtered.to_csv(index=False)
-st.download_button("⬇️ Download CSV", csv, "predictions.csv", "text/csv")
+# === TABS BY CATEGORY ===
+tabs = st.tabs(["📈 Stocks", "🪙 Crypto", "📘 ETFs"])
+categories = ["Stock", "Crypto", "ETF"]
 
-# === FEATURE SNAPSHOT ===
-st.subheader("🧠 Feature Snapshot")
-for idx, row in df_filtered.iterrows():
-    with st.expander(f"🔍 {row['Date']} – {row['Symbol']} ({row['Prediction'].upper()})"):
-        st.json(row["features"])
+for tab, cat in zip(tabs, categories):
+    with tab:
+        cat_df = df[df["Category"] == cat]
+        if cat_df.empty:
+            st.info(f"No {cat} predictions match the filters.")
+        else:
+            st.dataframe(cat_df[["Date", "symbol", "Prediction Label", "Confidence %", "edge"]], use_container_width=True)
 
-        # Line chart for technical indicators
-        feature_df = pd.DataFrame([row["features"]])
-        indicators = ["rsi", "macd", "macd_signal", "ema_20", "ema_50", "bb_upper", "bb_lower"]
-        if all(indicator in feature_df.columns for indicator in indicators):
-            indicator_values = feature_df[indicators].T.rename(columns={0: "Value"})
-            st.line_chart(indicator_values)
+            st.subheader("🧠 Feature Snapshots")
+            for _, row in cat_df.iterrows():
+                with st.expander(f"{row['Date']} – {row['symbol']} ({row['Prediction Label']})"):
+                    st.json(row["features"])
+                    feature_df = pd.DataFrame([row["features"]])
+                    indicators = ["rsi", "macd", "macd_signal", "ema_20", "ema_50", "bb_upper", "bb_lower"]
+                    indicators = [i for i in indicators if i in feature_df.columns]
+                    if indicators:
+                        st.line_chart(feature_df[indicators].T.rename(columns={0: "Value"}))
 
-# === SUMMARY METRICS ===
-st.subheader("📊 Rolling Summary")
-col1, col2, col3 = st.columns(3)
-col1.metric("🧾 Total Predictions", len(df_filtered))
-col2.metric("📶 Avg Confidence", f"{df_filtered['Confidence'].mean():.2f}")
-col3.metric("💸 Avg Edge", f"{df_filtered['Edge'].mean():.3f}")
+# === TOP PICKS ===
+st.sidebar.header("🎯 Top Picks")
+top_bull = df[df["predicted_label_name"] == "bullish"].sort_values("confidence", ascending=False).head(1)
+top_bear = df[df["predicted_label_name"] == "bearish"].sort_values("confidence", ascending=False).head(1)
+if not top_bull.empty:
+    st.sidebar.success(f"Top Bullish: {top_bull.iloc[0]['symbol']} ({top_bull.iloc[0]['confidence']:.2%})")
+if not top_bear.empty:
+    st.sidebar.error(f"Top Bearish: {top_bear.iloc[0]['symbol']} ({top_bear.iloc[0]['confidence']:.2%})")
+
+# === DOWNLOAD ===
+csv = df.to_csv(index=False)
+st.download_button("⬇️ Download Filtered Predictions", csv, "filtered_predictions.csv", "text/csv")
