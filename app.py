@@ -10,7 +10,7 @@ st.title("🤖 AI-Powered Market Predictions")
 st.caption("Explore predictions by asset type, confidence, and detailed feature charts.")
 
 # === LOAD DATA ===
-with open("daily_predictions.txt", "r") as f:
+with open("daily_predictions.json", "r") as f:
     predictions = json.load(f)
 
 df = pd.json_normalize(predictions)
