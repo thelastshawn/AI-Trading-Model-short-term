@@ -4,7 +4,7 @@ import json
 import yfinance as yf
 
 # === CONFIG ===
-st.set_page_config(page_title="🚀 Nova Picks – AI Market Predictions", layout="wide")
+st.set_page_config(page_title="🚀 Ninja Licks – AI Stocks/EFT/Crypto Market Predictions", layout="wide")
 
 # === HEADER ===
 st.title("💹 Nova Picks – AI Market Predictions")
