@@ -1,101 +1,111 @@
 import streamlit as st
-import json
 import pandas as pd
+import json
+from pathlib import Path
 
-# Page setup
-st.set_page_config(page_title="Ninja Licks – AI Market Predictions", layout="wide")
-st.title("💹 Ninja Licks – AI Stocks/ETF/Crypto Market Predictions")
-st.caption("A bold, beginner-friendly trading dashboard powered by AI.")
+st.set_page_config(
+    page_title="Ninja Licks",
+    page_icon="🌟",
+    layout="wide"
+)
 
-# Load JSON
-with open("daily_predictions.json", "r") as f:
+# Load predictions
+file_path = Path("daily_predictions.json")
+if not file_path.exists():
+    st.error("daily_predictions.json not found.")
+    st.stop()
+
+with open(file_path) as f:
     data = json.load(f)
 
-# Convert JSON to DataFrame
+# Convert to DataFrame
 df = pd.DataFrame(data)
 
-# Extract features into columns
-features_df = df["features"].apply(pd.Series)
-df = pd.concat([df.drop(columns=["features"]), features_df], axis=1)
+# Parse nested feature data
+features_df = pd.json_normalize(df["features"])
+df = df.drop(columns=["features"])
+df = pd.concat([df, features_df], axis=1)
 
-# Fix missing asset types
-df["category"] = df["category"].fillna("Unknown")
-df["predicted_label_name"] = df["predicted_label_name"].str.capitalize()
+# Add derived columns
+df["Asset Type"] = df["symbol"].apply(lambda x: "Crypto" if x.endswith("-USD") else "Stock/ETF")
+df["Confidence %"] = (df["confidence"] * 100).round(2)
+df["Edge %"] = (df["edge"] * 100).round(2)
 
-# Sidebar Filters
-st.sidebar.header("🎯 Filters")
-confidence_range = st.sidebar.slider("Min Confidence", 0.5, 1.0, 0.65)
-asset_types = st.sidebar.multiselect("Asset Type", options=df["category"].unique(), default=df["category"].unique())
-search_term = st.sidebar.text_input("🔍 Search Symbol")
+# ---------------- Sidebar Filters ---------------- #
+st.sidebar.header("🔍 Filters")
+min_conf = st.sidebar.slider("Minimum Confidence", 50, 100, 60)
+asset_type = st.sidebar.multiselect("Asset Type", ["Stock/ETF", "Crypto"], default=["Stock/ETF", "Crypto"])
+symbol_search = st.sidebar.text_input("Search Symbol")
 
-# Filter data
-filtered_df = df[df["confidence"] >= confidence_range]
-filtered_df = filtered_df[filtered_df["category"].isin(asset_types)]
-if search_term:
-    filtered_df = filtered_df[filtered_df["symbol"].str.contains(search_term.upper(), na=False)]
+filtered_df = df[df["Confidence %"] >= min_conf]
+filtered_df = filtered_df[filtered_df["Asset Type"].isin(asset_type)]
+if symbol_search:
+    filtered_df = filtered_df[filtered_df["symbol"].str.contains(symbol_search.upper())]
 
-# Sort by confidence
-filtered_df = filtered_df.sort_values(by="confidence", ascending=False)
+# ---------------- Tab Layout ---------------- #
+st.markdown("""
+<h1 style='color:#90EE90;'>💵 Ninja Licks – AI Stocks/ETF/Crypto Market Predictions</h1>
+<p>A bold, beginner-friendly trading dashboard powered by AI.</p>
+""", unsafe_allow_html=True)
 
-# Tabs
-tab1, tab2, tab3 = st.tabs(["📈 Picks", "📘 Glossary", "📊 Trends"])
+tabs = st.tabs(["📈 Picks", "📖 Glossary", "🔀 Trends"])
 
-# --- TAB 1: PICKS ---
-with tab1:
-    st.header("⭐ Today's Most Confident Picks")
+# ---------------- Picks Tab ---------------- #
+with tabs[0]:
+    st.subheader("🌟 Today's Most Confident Picks")
 
-    for _, row in filtered_df.iterrows():
-        emoji = "📉" if row["predicted_label_name"].lower() == "bearish" else "📈"
-        box_color = "🧠" if row["confidence"] > 0.8 else "💡"
-        label_display = f"{emoji} {row['predicted_label_name']} ({round(row['confidence'] * 100, 2)}% confidence)"
-        pick_header = f"{box_color} **{row['symbol']}** – {label_display}"
-        with st.expander(pick_header):
-            st.markdown(f"**Asset Type:** {row['category']}  |  **Edge:** {round(row['edge'] * 100, 2)}%")
-            st.markdown("---")
-            st.subheader("📊 Trader Signals")
+    for _, row in filtered_df.sort_values("Confidence %", ascending=False).iterrows():
+        with st.expander(f"🧠 {row['symbol']} — {'📈 Bullish' if row['prediction'] == 1 else '📉 Bearish'} ({row['Confidence %']}% confidence)"):
+            st.markdown(f"<b>Asset Type:</b> {row['Asset Type']}  |  <b>Edge:</b> {row['Edge %']}%", unsafe_allow_html=True)
+            st.markdown("""
+                <h5>🌐 Trader Signals</h5>
+                <ul>
+                <li><b>Close:</b> {:.2f}</li>
+                <li><b>Open:</b> {:.2f}</li>
+                <li><b>High:</b> {:.2f}</li>
+                <li><b>Low:</b> {:.2f}</li>
+                <li><b>Volume:</b> {:,.0f}</li>
+                <li><b>RSI (Relative Strength Index):</b> {:.2f}</li>
+                <li><b>MACD:</b> {:.2f}</li>
+                <li><b>MACD Signal Line:</b> {:.2f}</li>
+                <li><b>Bollinger Upper Band:</b> {:.2f}</li>
+                <li><b>Bollinger Lower Band:</b> {:.2f}</li>
+                <li><b>EMA 20:</b> {:.2f}</li>
+                <li><b>EMA 50:</b> {:.2f}</li>
+                <li><b>ROC (Rate of Change):</b> {:.2f}</li>
+                </ul>
+            """.format(
+                row.get("close", 0),
+                row.get("open", 0),
+                row.get("high", 0),
+                row.get("low", 0),
+                row.get("volume", 0),
+                row.get("rsi", 0),
+                row.get("macd", 0),
+                row.get("macd_signal", 0),
+                row.get("bb_upper", 0),
+                row.get("bb_lower", 0),
+                row.get("ema_20", 0),
+                row.get("ema_50", 0),
+                row.get("roc", 0),
+            ), unsafe_allow_html=True)
 
-            signals = {
-                "Close": row.get("close", None),
-                "Open": row.get("open", None),
-                "High": row.get("high", None),
-                "Low": row.get("low", None),
-                "Volume": row.get("volume", None),
-                "RSI": row.get("rsi", None),
-                "MACD": row.get("macd", None),
-                "MACD Signal": row.get("macd_signal", None),
-                "Bollinger Upper": row.get("bb_upper", None),
-                "Bollinger Lower": row.get("bb_lower", None),
-                "EMA 20": row.get("ema_20", None),
-                "EMA 50": row.get("ema_50", None),
-                "ROC": row.get("roc", None),
-            }
+# ---------------- Glossary Tab ---------------- #
+with tabs[1]:
+    st.subheader("📖 Glossary & Acronyms")
+    glossary = {
+        "RSI": "Relative Strength Index - measures momentum of price movements (typically 0-100)",
+        "MACD": "Moving Average Convergence Divergence - trend-following momentum indicator",
+        "Bollinger Bands": "Volatility bands placed above/below a moving average",
+        "EMA": "Exponential Moving Average - gives more weight to recent prices",
+        "ROC": "Rate of Change - % change in price over a specific period",
+        "Edge": "Predicted advantage over the implied market outcome",
+        "Confidence": "Model's estimated probability of being correct"
+    }
+    for term, definition in glossary.items():
+        st.markdown(f"**{term}**: {definition}")
 
-            # Display signals in clean layout
-            col1, col2 = st.columns(2)
-            for i, (label, val) in enumerate(signals.items()):
-                if pd.notna(val):
-                    col = col1 if i % 2 == 0 else col2
-                    col.markdown(f"**{label}:** `{round(val, 4)}`")
-
-# --- TAB 2: GLOSSARY ---
-with tab2:
-    st.header("📘 Glossary – Learn Your Licks")
-    st.markdown("""
-    - **RSI (Relative Strength Index):** Measures momentum. Above 70 = Overbought, Below 30 = Oversold.
-    - **MACD (Moving Average Convergence Divergence):** A trend-following indicator for momentum shifts.
-    - **MACD Signal:** The EMA of MACD — used to identify signals.
-    - **Bollinger Bands (Upper/Lower):** Show price volatility; bands widen when volatility increases.
-    - **EMA (Exponential Moving Average):** Weighted average favoring recent prices.
-    - **ROC (Rate of Change):** Percentage change in price from past periods.
-    - **Confidence:** The AI model’s probability behind its prediction.
-    - **Edge:** Your statistical advantage based on implied market probabilities.
-    """)
-
-# --- TAB 3: TRENDS (coming soon placeholder) ---
-with tab3:
-    st.header("📊 Trends")
-    st.info("📅 Trends & momentum visualizations will be available in a future update. Stay tuned!")
-
-# Footer
-st.markdown("---")
-st.caption("🧠 Built by Ninja Licks AI • Designed for aspiring traders 🚀")
+# ---------------- Trends Tab ---------------- #
+with tabs[2]:
+    st.subheader("🔀 Market Trend Ideas (Coming Soon)")
+    st.info("You'll soon be able to view historical predictions and performance trends here.")
