@@ -50,19 +50,21 @@ if uploaded_file is not None:
                 st.subheader("🧠 Feature Snapshots")
                 for _, row in cat_df.iterrows():
                     with st.expander(f"{row['Date']} – {row['symbol']} ({row['Prediction Label']})"):
-                        # === SAFELY DISPLAY FEATURES ===
-                        feature_dict = {}
-                        if "features" in row and isinstance(row["features"], dict):
-                            feature_dict = row["features"]
-                        else:
-                            feature_cols = [col for col in row.index if col.startswith("features.")]
-                            feature_dict = {col.split("features.")[-1]: row[col] for col in feature_cols if pd.notnull(row[col])}
+                        # ✅ SAFELY RECONSTRUCT FEATURES
+                        feature_cols = [col for col in row.index if col.startswith("features.")]
+                        feature_dict = {
+                            col.split("features.")[-1]: row[col]
+                            for col in feature_cols
+                            if pd.notnull(row[col])
+                        }
 
                         if feature_dict:
                             st.json(feature_dict)
                             feature_df = pd.DataFrame([feature_dict])
+
                             indicators = ["rsi", "macd", "macd_signal", "ema_20", "ema_50", "bb_upper", "bb_lower"]
                             indicators = [i for i in indicators if i in feature_df.columns]
+
                             if indicators:
                                 st.line_chart(feature_df[indicators].T.rename(columns={0: "Value"}))
                         else:
