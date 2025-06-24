@@ -7,7 +7,7 @@ import yfinance as yf
 st.set_page_config(page_title="🚀 Ninja Licks – AI Stocks/EFT/Crypto Market Predictions", layout="wide")
 
 # === HEADER ===
-st.title("💹 Nova Picks – AI Market Predictions")
+st.title("💹 Ninja Licks – AI Stocks/EFT/Crypto Market Predictions")
 st.caption("A bold, beginner-friendly trading dashboard powered by AI.")
 
 # === SYMBOL NAME LOOKUP ===
