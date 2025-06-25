@@ -34,7 +34,7 @@ CONFIDENCE_COLOR = {
 def get_confidence_label(conf):
     if conf >= 0.66:
         return "High"
-    elif conf >= 0.5:
+    elif conf >= 0.4:
         return "Medium"
     else:
         return "Low"
