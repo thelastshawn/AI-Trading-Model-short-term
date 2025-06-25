@@ -1,3 +1,4 @@
+# --- START OF FILE ---
 import streamlit as st
 import pandas as pd
 import json
@@ -44,17 +45,9 @@ def to_excel(df):
     writer = pd.ExcelWriter(output, engine='xlsxwriter')
     df.to_excel(writer, index=False, sheet_name='Sheet1')
     writer.close()
-    processed_data = output.getvalue()
-    return processed_data
+    return output.getvalue()
 
-def simplify_features(row):
-    try:
-        features = json.loads(row)
-        return f"RSI: {features.get('rsi', 'N/A')} | MACD: {features.get('macd', 'N/A')} | Close: ${round(features.get('close', 0), 2)}"
-    except:
-        return "N/A"
-
-# Main App
+# Set up Streamlit app
 st.set_page_config(page_title="Ninja Licks", layout="wide")
 st.markdown("""
     <h1>🥷💸 Ninja Licks – AI Stocks/ETF/Crypto Picks</h1>
@@ -83,15 +76,20 @@ with tabs[0]:
     for i, row in top3.iterrows():
         label = get_confidence_label(row['confidence'])
         emoji = CONFIDENCE_COLOR[label]
-        st.markdown(f"{i+1}. **{row['symbol']}** | 📈 {row['predicted_label_name'].capitalize()} | **{round(row['confidence']*100,2)}%** {emoji} | {round(row['edge']*100,2)}% | 📅 {row['Date']}")
+        st.markdown(f"**{i+1}. {row['symbol']}** | 📈 {row['predicted_label_name'].capitalize()} | **{round(row['confidence']*100,2)}%** {emoji} | {round(row['edge']*100,2)}% | 📅 {row['Date']}")
 
     st.divider()
     st.markdown("### 🔻 Other Picks")
     rest = todays.sort_values(by="confidence", ascending=False).iloc[3:20]
-    for i, row in rest.iterrows():
-        label = get_confidence_label(row['confidence'])
-        emoji = CONFIDENCE_COLOR[label]
-        st.markdown(f"**{row['symbol']}** | 📈 {row['predicted_label_name'].capitalize()} | **{round(row['confidence']*100,2)}%** {emoji} | {round(row['edge']*100,2)}% | 📅 {row['Date']}")
+    if not rest.empty:
+        for i, row in rest.iterrows():
+            label = get_confidence_label(row['confidence'])
+            emoji = CONFIDENCE_COLOR[label]
+            st.markdown(f"**{row['symbol']}** | 📈 {row['predicted_label_name'].capitalize()} | **{round(row['confidence']*100,2)}%** {emoji} | {round(row['edge']*100,2)}% | 📅 {row['Date']}")
+    else:
+        st.markdown("*No additional picks today.*")
+
+    st.markdown("**Confidence Key:** 🔴 High | 🟡 Medium | ⚪ Low")
 
 # ----------------------------
 # 📈 Charts Tab
@@ -119,7 +117,9 @@ with tabs[2]:
         (df['symbol'].isin(symbols)) &
         (df['confidence']*100 >= min_conf)
     ].copy()
-    filtered['features'] = filtered['features'].apply(lambda x: simplify_features(x))
+
+    if 'features' in filtered.columns:
+        del filtered['features']
 
     st.dataframe(filtered)
 
@@ -143,4 +143,8 @@ with tabs[3]:
     - **Predicted Label**: AI's decision (bullish or bearish)
     - **Symbol**: Ticker symbol (e.g., AAPL, ETH-USD, SPY)
     - **Asset Type**: Stock, ETF, or Crypto
-    """)
+    - **Volume**: The number of shares or tokens traded
+    - **ROC**: Rate of Change – percentage speed of price movement
+    - **BB Upper/Lower**: Bollinger Bands – range volatility indicators
+""")
+# --- END OF FILE ---
