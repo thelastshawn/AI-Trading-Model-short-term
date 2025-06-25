@@ -1,136 +1,146 @@
 import streamlit as st
 import pandas as pd
+import json
 import datetime
 from io import BytesIO
-import base64
 import plotly.express as px
+from datetime import date
 
 # Load predictions
-@st.cache_data
 def load_predictions():
     try:
-        df = pd.read_json("daily_predictions.json")
-        df["Date"] = pd.to_datetime(df["Date"])
-        return df
-    except:
+        with open("daily_predictions.json", "r") as f:
+            data = json.load(f)
+        return pd.DataFrame(data)
+    except Exception as e:
+        st.error("Error loading predictions.")
         return pd.DataFrame()
 
-df = load_predictions()
-today = pd.Timestamp.now().normalize()
+# Convert date string to date object
+def parse_date(d):
+    try:
+        return datetime.datetime.strptime(d, "%Y-%m-%d").date()
+    except:
+        return None
 
-# Fallback to most recent per symbol if no data for today
-def get_latest_per_symbol(df):
-    return df.sort_values("Date").groupby("symbol", as_index=False).last()
+# Confidence coloring
+CONFIDENCE_COLOR = {
+    "High": "🔴",
+    "Medium": "🟡",
+    "Low": "⚪",
+}
 
-fresh_df = df[df["Date"] == today]
-if fresh_df.empty:
-    fresh_df = get_latest_per_symbol(df)
-
-# App Layout
-st.set_page_config(page_title="Ninja Licks - AI Predictions", layout="wide")
-st.title("💸 Ninja Licks – AI Stocks/ETF/Crypto Picks")
-st.caption("Grouped by confidence. Fresh predictions daily. History included.")
-
-tabs = st.tabs(["📈 Predictions", "📊 Charts", "📚 Glossary", "🕒 History"])
-
-# ----------------------
-# 📈 Predictions Tab
-# ----------------------
-with tabs[0]:
-    st.header("🧮 Filter Settings")
-    min_conf = st.selectbox("📉 Min Confidence", options=[50, 60, 65, 70, 75, 80, 85, 90], index=0)
-    asset_type = st.selectbox("🧾 Asset Type", options=["All", "Stock/ETF", "Crypto"])
-    symbol_filter = st.selectbox("🔍 Symbol", options=["All"] + sorted(df["symbol"].unique().tolist()))
-    sort_by = st.selectbox("📊 Sort By", options=["Confidence", "Edge", "Symbol"])
-
-    display_df = fresh_df.copy()
-    if asset_type != "All":
-        display_df = display_df[display_df["asset_type"] == asset_type]
-    if symbol_filter != "All":
-        display_df = display_df[display_df["symbol"] == symbol_filter]
-    display_df = display_df[display_df["confidence"] >= min_conf / 100]
-    display_df = display_df.sort_values(by=sort_by.lower(), ascending=False)
-
-    st.subheader("🏆 Top 3 Picks for Today")
-    top3 = display_df.head(3)
-    if not top3.empty:
-        for i, row in top3.iterrows():
-            st.markdown(f"**{row['symbol']}** | {'📈 Bullish' if row['prediction'] == 1 else '📉 Bearish'} | **{row['confidence']:.2%}** 💥 {row['edge']:.2%} 📅 {row['Date'].date()}")
+def get_confidence_label(conf):
+    if conf >= 0.66:
+        return "High"
+    elif conf >= 0.5:
+        return "Medium"
     else:
-        st.warning("No predictions here today.")
+        return "Low"
 
-    # Confidence bands
-    st.markdown("""
-    <style>
-    .legend { display: flex; gap: 10px; margin-top: 10px; }
-    .legend span { display: flex; align-items: center; gap: 5px; }
-    </style>
-    <div class='legend'>
-        <span>🔴 High</span>
-        <span>🟡 Medium</span>
-        <span>⚪ Low</span>
-    </div>
-    """, unsafe_allow_html=True)
+# Export helpers
+def to_excel(df):
+    output = BytesIO()
+    writer = pd.ExcelWriter(output, engine='xlsxwriter')
+    df.to_excel(writer, index=False, sheet_name='Sheet1')
+    writer.close()
+    processed_data = output.getvalue()
+    return processed_data
 
-# ----------------------
-# 📊 Charts Tab
-# ----------------------
+def simplify_features(row):
+    try:
+        features = json.loads(row)
+        return f"RSI: {features.get('rsi', 'N/A')} | MACD: {features.get('macd', 'N/A')} | Close: ${round(features.get('close', 0), 2)}"
+    except:
+        return "N/A"
+
+# Main App
+st.set_page_config(page_title="Ninja Licks", layout="wide")
+st.markdown("""
+    <h1>💸 Ninja Licks – AI Stocks/ETF/Crypto Picks</h1>
+    <p>Grouped by confidence. Fresh predictions daily. History included.</p>
+""", unsafe_allow_html=True)
+
+# Load data
+df = load_predictions()
+df['Date'] = df['Date'].apply(parse_date)
+
+# Tabs
+tabs = st.tabs(["📊 Predictions", "📈 Charts", "📁 Reports & Exports", "📘 Glossary"])
+
+# ----------------------------
+# 📊 Predictions Tab
+# ----------------------------
+with tabs[0]:
+    st.subheader("🏆 Top 3 Picks for Today")
+    today = date.today()
+    todays = df[df['Date'] == today]
+
+    if todays.empty:
+        todays = df[df['Date'] == df['Date'].max()]
+
+    top3 = todays.sort_values(by="confidence", ascending=False).head(3)
+    for i, row in top3.iterrows():
+        label = get_confidence_label(row['confidence'])
+        emoji = CONFIDENCE_COLOR[label]
+        st.markdown(f"{i+1}. **{row['symbol']}** | 📈 {row['predicted_label_name'].capitalize()} | **{round(row['confidence']*100,2)}%** {emoji} | {round(row['edge']*100,2)}% | 📅 {row['Date']}")
+
+    st.divider()
+    st.markdown("### 🔻 Other Picks")
+    rest = todays.sort_values(by="confidence", ascending=False).iloc[3:20]
+    for i, row in rest.iterrows():
+        label = get_confidence_label(row['confidence'])
+        emoji = CONFIDENCE_COLOR[label]
+        st.markdown(f"**{row['symbol']}** | 📈 {row['predicted_label_name'].capitalize()} | **{round(row['confidence']*100,2)}%** {emoji} | {round(row['edge']*100,2)}% | 📅 {row['Date']}")
+
+# ----------------------------
+# 📈 Charts Tab
+# ----------------------------
 with tabs[1]:
-    st.header("📊 Confidence & Edge Charts")
-    chart_symbol = st.selectbox("Select Symbol", sorted(df["symbol"].unique()))
-    chart_metric = st.radio("Metric", ["confidence", "edge"])
-    df_chart = df[df["symbol"] == chart_symbol].sort_values("Date")
-    fig = px.line(df_chart, x="Date", y=chart_metric, title=f"{chart_metric.title()} Over Time: {chart_symbol}")
+    st.subheader("📈 Visual Trends")
+    st.markdown("Select an asset to view confidence trends over time.")
+    selected_symbol = st.selectbox("Choose Symbol", sorted(df['symbol'].unique()))
+    chart_df = df[df['symbol'] == selected_symbol].sort_values(by='Date')
+    fig = px.line(chart_df, x='Date', y='confidence', title=f"Confidence Over Time – {selected_symbol}")
     st.plotly_chart(fig, use_container_width=True)
 
-# ----------------------
-# 📚 Glossary Tab
-# ----------------------
+# ----------------------------
+# 📁 Reports & Exports Tab
+# ----------------------------
 with tabs[2]:
-    st.header("📘 Beginner Glossary")
-    glossary = {
-        "Bullish": "Expecting the price to go up 📈",
-        "Bearish": "Expecting the price to go down 📉",
-        "Confidence": "How certain the AI is in its prediction (0-100%) 🤖",
-        "Edge": "How much advantage this prediction has vs. market odds 🎯",
-        "ETF": "Exchange-Traded Fund – a basket of stocks you can trade like a stock",
-        "Symbol": "A shorthand code for a stock or crypto asset (e.g. AAPL or BTC-USD)",
-        "Prediction": "The direction the AI believes the market will move",
-        "AI-powered": "Backed by machine learning models trained on financial data 🧠",
-        "RSI": "Relative Strength Index – tells if something is overbought or oversold",
-        "MACD": "Moving Average Convergence Divergence – trend-following momentum indicator",
-        "Volume": "How much of an asset is traded during a time period 📊"
-    }
-    for term, definition in glossary.items():
-        st.markdown(f"**{term}** – {definition}")
+    st.subheader("🕓 Prediction History")
+    start_date, end_date = st.date_input("Select Date Range", value=[df['Date'].min(), df['Date'].max()])
+    symbols = st.multiselect("Symbols", options=sorted(df['symbol'].unique()), default=sorted(df['symbol'].unique()))
+    min_conf = st.slider("Min Confidence", 0, 100, 50)
 
-# ----------------------
-# 🕒 History Tab
-# ----------------------
+    filtered = df[
+        (df['Date'] >= start_date) &
+        (df['Date'] <= end_date) &
+        (df['symbol'].isin(symbols)) &
+        (df['confidence']*100 >= min_conf)
+    ].copy()
+    filtered['features'] = filtered['features'].apply(lambda x: simplify_features(x))
+
+    st.dataframe(filtered)
+
+    csv = filtered.to_csv(index=False).encode('utf-8')
+    xlsx = to_excel(filtered)
+    st.download_button("📥 Download CSV", csv, "predictions.csv")
+    st.download_button("📊 Download Excel", xlsx, "predictions.xlsx")
+
+# ----------------------------
+# 📘 Glossary Tab
+# ----------------------------
 with tabs[3]:
-    st.header("🕒 Prediction History")
-    date_range = st.date_input("Select Date Range", value=(df["Date"].min(), df["Date"].max()))
-    history_symbols = st.multiselect("Symbols", options=sorted(df["symbol"].unique()), default=list(df["symbol"].unique()))
-    confidence_range = st.slider("Min Confidence", 50, 100, (50, 100))
-
-    history_df = df[(df["Date"] >= pd.to_datetime(date_range[0])) &
-                    (df["Date"] <= pd.to_datetime(date_range[1])) &
-                    (df["symbol"].isin(history_symbols)) &
-                    (df["confidence"] * 100 >= confidence_range[0]) &
-                    (df["confidence"] * 100 <= confidence_range[1])]
-
-    st.dataframe(history_df, use_container_width=True)
-
-    csv = history_df.to_csv(index=False).encode("utf-8")
-    xlsx = BytesIO()
-    with pd.ExcelWriter(xlsx, engine='xlsxwriter') as writer:
-        history_df.to_excel(writer, index=False, sheet_name='Predictions')
-    xlsx.seek(0)
-
-    st.download_button("⬇️ Download CSV", csv, "history.csv", "text/csv")
-    st.download_button("📊 Download Excel", xlsx, "history.xlsx")
-
-    st.markdown("---")
-    st.subheader("🧾 Printable Report (PDF-style view)")
-    for _, row in history_df.iterrows():
-        st.markdown(f"**{row['symbol']}** | {'📈 Bullish' if row['prediction'] == 1 else '📉 Bearish'} | Confidence: {row['confidence']:.2%} | Edge: {row['edge']:.2%} | Date: {row['Date'].date()}")
+    st.subheader("📘 Beginner Glossary")
+    st.markdown("""
+    - **Confidence**: The AI's belief in its prediction (higher = more confident)
+    - **Edge**: How much better the AI thinks this trade is than a coin flip
+    - **Bullish/Bearish**: Predicting price will go up/down
+    - **RSI**: Relative Strength Index – helps spot overbought/oversold levels
+    - **MACD**: Moving Average Convergence Divergence – momentum indicator
+    - **EMA**: Exponential Moving Average – used to smooth price data
+    - **Predicted Label**: AI's decision (bullish or bearish)
+    - **Symbol**: Ticker symbol (e.g., AAPL, ETH-USD, SPY)
+    - **Asset Type**: Stock, ETF, or Crypto
+    """)
