@@ -69,8 +69,6 @@ with tabs[0]:
         <span>🔴 High</span>
         <span>🟡 Medium</span>
         <span>⚪ Low</span>
-        <span>📘 Glossary</span>
-        <span>🕒 History</span>
     </div>
     """, unsafe_allow_html=True)
 
