@@ -57,7 +57,7 @@ def simplify_features(row):
 # Main App
 st.set_page_config(page_title="Ninja Licks", layout="wide")
 st.markdown("""
-    <h1>💸 Ninja Licks – AI Stocks/ETF/Crypto Picks</h1>
+    <h1>🥷💸 Ninja Licks – AI Stocks/ETF/Crypto Picks</h1>
     <p>Grouped by confidence. Fresh predictions daily. History included.</p>
 """, unsafe_allow_html=True)
 
